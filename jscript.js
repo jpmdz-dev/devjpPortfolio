@@ -1,8 +1,7 @@
 
-
 /* ==========================================
    JPMDZ PORTFOLIO
-   COMPLETE JAVASCRIPT
+   COMPLETE JAVASCRIPT (with anti-bot protection)
 ========================================== */
 
 
@@ -20,7 +19,6 @@ function setTheme(theme) {
     document.documentElement.classList.toggle("dark-mode", isDark);
     document.body.classList.toggle("dark-mode", isDark);
 
-    // Change theme icon
     if (themeToggle) {
 
         const icon = themeToggle.querySelector("i");
@@ -86,7 +84,6 @@ if (themeToggle) {
 
         setTheme(newTheme);
 
-        // Save selected theme
         try {
 
             localStorage.setItem("portfolio-theme", newTheme);
@@ -136,9 +133,9 @@ function setMenu(open) {
 }
 
 
-// Burger button click
 if (menuToggle && navMenu) {
 
+    // Burger button click
     menuToggle.addEventListener("click", function () {
 
         const isOpen = navMenu.classList.contains("open");
@@ -201,7 +198,7 @@ if (menuToggle && navMenu) {
 
 /* ==========================================
    3. CONTACT FORM
-   WEB3FORMS EMAIL SUBMISSION
+   WEB3FORMS EMAIL SUBMISSION + ANTI-BOT
 ========================================== */
 
 const contactForm = document.getElementById("contact-form");
@@ -232,6 +229,86 @@ if (contactForm) {
         messageInput
     ].filter(Boolean);
 
+
+    /* ---------- ANTI-BOT SETTINGS ---------- */
+
+    const FORM_LOADED_AT = Date.now();
+    const MIN_FILL_TIME_MS = 3000;       // humans take longer than 3 seconds
+    const COOLDOWN_MS = 60 * 1000;       // 1 message per minute
+    const MAX_LINKS = 2;                 // spam usually contains many links
+
+    const MAX_LENGTHS = {
+        name: 80,
+        email: 120,
+        subject: 120,
+        message: 2000
+    };
+
+    // Limit input length on the fields themselves
+    fields.forEach(function (field) {
+
+        const max = MAX_LENGTHS[field.name];
+
+        if (max) {
+
+            field.setAttribute("maxlength", max);
+
+        }
+
+    });
+
+
+    // Returns a reason string if the submission looks like a bot, otherwise null
+    function isLikelyBot() {
+
+        // 1. Honeypots filled
+        const botcheck = contactForm.querySelector('[name="botcheck"]');
+        const website = contactForm.querySelector('[name="website"]');
+
+        if (
+            (botcheck && botcheck.checked) ||
+            (website && website.value.trim() !== "")
+        ) {
+            return "honeypot";
+        }
+
+        // 2. Form submitted too quickly
+        if (Date.now() - FORM_LOADED_AT < MIN_FILL_TIME_MS) {
+            return "too-fast";
+        }
+
+        // 3. Too many links in the message
+        if (messageInput) {
+
+            const links = (
+                messageInput.value.match(/https?:\/\/|www\./gi) || []
+            ).length;
+
+            if (links > MAX_LINKS) {
+                return "too-many-links";
+            }
+
+        }
+
+        // 4. Cooldown between submissions
+        try {
+
+            const last = Number(localStorage.getItem("last-submit") || 0);
+
+            if (Date.now() - last < COOLDOWN_MS) {
+                return "cooldown";
+            }
+
+        } catch (error) {
+            // Storage unavailable, skip this check
+        }
+
+        return null;
+
+    }
+
+
+    /* ---------- FIELD ERRORS ---------- */
 
     // Show error message
     function showError(input, message) {
@@ -281,7 +358,8 @@ if (contactForm) {
     }
 
 
-    // Validate individual fields
+    /* ---------- VALIDATION ---------- */
+
     function validateField(input) {
 
         if (!input) return false;
@@ -291,7 +369,7 @@ if (contactForm) {
         clearError(input);
 
 
-        // NAME VALIDATION
+        // NAME
         if (input === nameInput) {
 
             if (!value) {
@@ -310,8 +388,7 @@ if (contactForm) {
 
             }
 
-            const namePattern =
-                /^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u;
+            const namePattern = /^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u;
 
             if (!namePattern.test(value)) {
 
@@ -324,7 +401,7 @@ if (contactForm) {
         }
 
 
-        // EMAIL VALIDATION
+        // EMAIL
         if (input === emailInput) {
 
             if (!value) {
@@ -335,8 +412,7 @@ if (contactForm) {
 
             }
 
-            const emailPattern =
-                /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
             if (!emailPattern.test(value)) {
 
@@ -349,7 +425,7 @@ if (contactForm) {
         }
 
 
-        // SUBJECT VALIDATION
+        // SUBJECT
         if (input === subjectInput) {
 
             if (!value) {
@@ -371,7 +447,7 @@ if (contactForm) {
         }
 
 
-        // MESSAGE VALIDATION
+        // MESSAGE
         if (input === messageInput) {
 
             if (!value) {
@@ -397,7 +473,6 @@ if (contactForm) {
     }
 
 
-    // Validate entire form
     function validateForm() {
 
         let isValid = true;
@@ -417,7 +492,7 @@ if (contactForm) {
     }
 
 
-    // Validate when leaving an input
+    // Validate when leaving an input, clear errors when correcting
     fields.forEach(function (field) {
 
         field.addEventListener("blur", function () {
@@ -426,8 +501,6 @@ if (contactForm) {
 
         });
 
-
-        // Remove errors when correcting input
         field.addEventListener("input", function () {
 
             if (field.hasAttribute("aria-invalid")) {
@@ -441,7 +514,8 @@ if (contactForm) {
     });
 
 
-    // Submit form
+    /* ---------- SUBMIT ---------- */
+
     contactForm.addEventListener("submit", async function (event) {
 
         event.preventDefault();
@@ -449,6 +523,49 @@ if (contactForm) {
         if (formStatus) {
 
             formStatus.textContent = "";
+
+        }
+
+
+        // Anti-bot checks
+        const botReason = isLikelyBot();
+
+        if (botReason) {
+
+            if (botReason === "cooldown") {
+
+                if (formStatus) {
+                    formStatus.textContent =
+                        "Please wait a minute before sending another message.";
+                }
+
+            } else if (botReason === "too-fast") {
+
+                if (formStatus) {
+                    formStatus.textContent =
+                        "Please take a moment to review your message, then try again.";
+                }
+
+            } else if (botReason === "too-many-links") {
+
+                if (formStatus) {
+                    formStatus.textContent =
+                        "Your message contains too many links.";
+                }
+
+            } else {
+
+                // Honeypot: fake success so bots don't adapt
+                if (formStatus) {
+                    formStatus.textContent =
+                        "Thank you! Your message has been sent successfully.";
+                }
+
+                contactForm.reset();
+
+            }
+
+            return;
 
         }
 
@@ -478,10 +595,33 @@ if (contactForm) {
         }
 
 
+        // Captcha check (only runs if an hCaptcha widget is on the form)
+        const captchaWidget = contactForm.querySelector(".h-captcha");
+
+        if (captchaWidget) {
+
+            const captchaResponse = contactForm.querySelector(
+                '[name="h-captcha-response"]'
+            );
+
+            if (!captchaResponse || !captchaResponse.value) {
+
+                if (formStatus) {
+
+                    formStatus.textContent =
+                        "Please complete the captcha before sending.";
+
+                }
+
+                return;
+
+            }
+
+        }
+
+
         // Check Web3Forms access key
-        const accessKey = contactForm.querySelector(
-            '[name="access_key"]'
-        );
+        const accessKey = contactForm.querySelector('[name="access_key"]');
 
         if (
             !accessKey ||
@@ -507,7 +647,7 @@ if (contactForm) {
         const formData = new FormData(contactForm);
 
 
-        // Sending message status
+        // Sending status
         if (formStatus) {
 
             formStatus.textContent = "Sending your message...";
@@ -536,7 +676,6 @@ if (contactForm) {
             const result = await response.json();
 
 
-            // Successful submission
             if (response.ok && result.success) {
 
                 if (formStatus) {
@@ -549,6 +688,26 @@ if (contactForm) {
                 contactForm.reset();
 
                 fields.forEach(clearError);
+
+                // Reset captcha if present
+                if (window.hcaptcha) {
+
+                    try {
+                        window.hcaptcha.reset();
+                    } catch (error) {
+                        // Ignore captcha reset errors
+                    }
+
+                }
+
+                // Save time of last successful submission (cooldown)
+                try {
+
+                    localStorage.setItem("last-submit", String(Date.now()));
+
+                } catch (error) {
+                    // Storage unavailable
+                }
 
             } else {
 
